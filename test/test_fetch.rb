@@ -26,9 +26,24 @@ class TestFetcher < Minitest::Test
     end
 
     it 'retrieves with strict setting' do
-      fetch = Sidekiq::BasicFetch.new(:queues => ['basic', 'bar', 'bar'], :strict => true)
+      fetch = Sidekiq::BasicFetch.new(:queues => ['basic', 'bar'], :strict => true)
       cmd = fetch.queues_cmd
       assert_equal cmd, ['queue:basic', 'queue:bar', Sidekiq::BasicFetch::TIMEOUT]
+    end
+
+    describe 'when duplicate queue names' do
+      it 'raises an argument error' do
+        assert_raises(ArgumentError) { Sidekiq::BasicFetch.new(:queues => ['basic', 'bar', 'bar'], :strict => true) }
+        assert_raises(ArgumentError) { Sidekiq::BasicFetch.new(:queues => ['bar', ['bar', 2]]) }
+      end
+    end
+
+    it 'retrieves with queues with weights' do
+      fetch = Sidekiq::BasicFetch.new(:queues => ['bar', ['foo', 3]])
+      cmd = fetch.queues_cmd
+      # Sorting to remove the randomness introduced by queues_cmd by shuffling the queue names
+      cmd_sorted = [cmd[0..1].sort, cmd[-1]].flatten
+      assert_equal cmd_sorted, ['queue:bar', 'queue:foo', Sidekiq::BasicFetch::TIMEOUT]
     end
 
     it 'bulk requeues' do

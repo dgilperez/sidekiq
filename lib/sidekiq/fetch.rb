@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 require 'sidekiq'
+require 'sidekiq/queue_parser'
 
 module Sidekiq
   class BasicFetch
+    include QueueParser
+
     # We want the fetch operation to timeout every few seconds so the thread
     # can check if the process is shutting down.
     TIMEOUT = 2
@@ -24,8 +27,10 @@ module Sidekiq
     end
 
     def initialize(options)
-      @strictly_ordered_queues = !!options[:strict]
-      @queues = options[:queues].map { |q| "queue:#{q}" }
+      opts = options.dup
+      parse_queues(opts, opts.delete(:queues))
+      @strictly_ordered_queues = options.fetch(:strict, !!opts[:strict])
+      @queues = opts[:queues].map { |q| "queue:#{q}" }
       if @strictly_ordered_queues
         @queues = @queues.uniq
         @queues << TIMEOUT
@@ -76,6 +81,5 @@ module Sidekiq
     rescue => ex
       Sidekiq.logger.warn("Failed to requeue #{inprogress.size} jobs: #{ex.message}")
     end
-
   end
 end
